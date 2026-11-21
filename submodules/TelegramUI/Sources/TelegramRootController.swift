@@ -38,36 +38,36 @@ import NewsScreen
 private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceholderNode {
     private var presentationData: PresentationData
     private var presentationInterfaceState: ChatPresentationInterfaceState
-    
+
     let wallpaperBackgroundNode: WallpaperBackgroundNode
     let emptyNode: ChatEmptyNode
-    
+
     init(context: AccountContext) {
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
         self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, preferredGlassType: .default, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: context.account.peerId, mode: .standard(.default), chatLocation: .peer(id: context.account.peerId), subject: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
-        
+
         self.wallpaperBackgroundNode = createWallpaperBackgroundNode(context: context, forChatDisplay: true, useSharedAnimationPhase: true)
         self.emptyNode = ChatEmptyNode(context: context, interaction: nil)
-        
+
         super.init()
-        
+
         self.addSubnode(self.wallpaperBackgroundNode)
         self.addSubnode(self.emptyNode)
     }
-    
+
     func updatePresentationData(_ presentationData: PresentationData) {
         self.presentationData = presentationData
         let preferredGlassType = self.presentationInterfaceState.preferredGlassType
         self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, preferredGlassType: preferredGlassType, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: self.presentationInterfaceState.limitsConfiguration, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: self.presentationInterfaceState.accountPeerId, mode: .standard(.default), chatLocation: self.presentationInterfaceState.chatLocation, subject: nil, greetingData: nil, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
-        
+
         self.wallpaperBackgroundNode.update(wallpaper: presentationData.chatWallpaper, animated: false)
     }
-    
+
     func updateLayout(size: CGSize, needsTiling: Bool, transition: ContainedViewLayoutTransition) {
         let contentBounds = CGRect(origin: .zero, size: size)
         self.wallpaperBackgroundNode.updateLayout(size: size, displayMode: needsTiling ? .aspectFit : .aspectFill, transition: transition)
         transition.updateFrame(node: self.wallpaperBackgroundNode, frame: contentBounds)
-        
+
         self.emptyNode.updateLayout(interfaceState: self.presentationInterfaceState, subject: .detailsPlaceholder, loadingNode: nil, backgroundNode: self.wallpaperBackgroundNode, size: contentBounds.size, insets: .zero, leftInset: 0.0, rightInset: 0.0, transition: transition)
         transition.updateFrame(node: self.emptyNode, frame: CGRect(origin: .zero, size: size))
         self.emptyNode.update(rect: contentBounds, within: contentBounds.size, transition: transition)
@@ -76,46 +76,149 @@ private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceh
 
 public final class TelegramRootController: NavigationController, TelegramRootControllerInterface {
     private let context: AccountContext
-    
+    private var customMenuButton: UIButton?
+
+    override public func viewDidLoad() {
+        super.viewDidLoad()
+        self.setupCustomMenuButton()
+    }
+
+    private func setupCustomMenuButton() {
+        guard self.customMenuButton == nil else {
+            return
+        }
+
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.accessibilityLabel = "Открыть меню"
+        button.tintColor = .label
+
+        let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+        blurView.translatesAutoresizingMaskIntoConstraints = false
+        blurView.isUserInteractionEnabled = false
+        blurView.clipsToBounds = true
+        blurView.layer.cornerRadius = 20.0
+        button.insertSubview(blurView, at: 0)
+
+        NSLayoutConstraint.activate([
+            blurView.leadingAnchor.constraint(equalTo: button.leadingAnchor),
+            blurView.trailingAnchor.constraint(equalTo: button.trailingAnchor),
+            blurView.topAnchor.constraint(equalTo: button.topAnchor),
+            blurView.bottomAnchor.constraint(equalTo: button.bottomAnchor)
+        ])
+
+        let image = UIImageView(image: UIImage(systemName: "crown.fill"))
+        image.translatesAutoresizingMaskIntoConstraints = false
+        image.contentMode = .scaleAspectFit
+        image.tintColor = .label
+        button.addSubview(image)
+
+        NSLayoutConstraint.activate([
+            image.centerXAnchor.constraint(equalTo: button.centerXAnchor),
+            image.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+            image.widthAnchor.constraint(equalToConstant: 19.0),
+            image.heightAnchor.constraint(equalToConstant: 19.0),
+            button.widthAnchor.constraint(equalToConstant: 44.0),
+            button.heightAnchor.constraint(equalToConstant: 40.0)
+        ])
+
+        button.layer.cornerRadius = 20.0
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOpacity = 0.12
+        button.layer.shadowRadius = 8.0
+        button.layer.shadowOffset = CGSize(width: 0.0, height: 3.0)
+        button.addTarget(self, action: #selector(self.customMenuButtonPressed), for: .touchUpInside)
+
+        self.view.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor, constant: 8.0),
+            button.trailingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.trailingAnchor, constant: -16.0)
+        ])
+
+        self.customMenuButton = button
+    }
+
+    @objc private func customMenuButtonPressed() {
+        let userId = UserDefaults.standard.integer(forKey: "custom_user_id")
+        let theme = self.presentationData.theme
+
+        let alertController = UIAlertController(title: "Меню", message: nil, preferredStyle: .actionSheet)
+
+        alertController.addAction(UIAlertAction(title: "💎 Кошелёк TON и Админка", style: .default, handler: { [weak self] _ in
+            guard let self else { return }
+            self.pushViewController(TonWalletAndAdminController(theme: theme, userId: userId))
+        }))
+        alertController.addAction(UIAlertAction(title: "📰 Лента постов", style: .default, handler: { [weak self] _ in
+            guard let self else { return }
+            self.pushViewController(SocialFeedController(theme: theme, userId: userId))
+        }))
+        alertController.addAction(UIAlertAction(title: "🏆 Лидерборды (Форбс / Воры)", style: .default, handler: { [weak self] _ in
+            guard let self else { return }
+            self.pushViewController(GlobalLeaderboardController(theme: theme, userId: userId))
+        }))
+        alertController.addAction(UIAlertAction(title: "⚔️ Кланы и Войны", style: .default, handler: { [weak self] _ in
+            guard let self else { return }
+            self.pushViewController(ClanHubController(theme: theme, userId: userId))
+        }))
+        alertController.addAction(UIAlertAction(title: "🛍 Маркет и Подарки", style: .default, handler: { [weak self] _ in
+            guard let self else { return }
+            self.pushViewController(FragmentMarketAndGiftsController(theme: theme, userId: userId))
+        }))
+        alertController.addAction(UIAlertAction(title: "🎫 Мои номера (+888/+777/+666)", style: .default, handler: { [weak self] _ in
+            guard let self else { return }
+            self.pushViewController(AssetSheetController(theme: theme, userId: userId))
+        }))
+        alertController.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+
+        if let popover = alertController.popoverPresentationController {
+            popover.sourceView = self.customMenuButton ?? self.view
+            popover.sourceRect = (self.customMenuButton ?? self.view).bounds
+        }
+
+        self.present(alertController, animated: true)
+    }
+
     public var rootTabController: TabBarController?
-    
+
     /// The Contacts screen `openContacts()` pushed; `getContactsController()` returns it while it is open.
     private weak var contactsController: ContactsController?
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
     public var newsController: NewsScreen?
-    
+    public var gameTabController: CustomGameTabController?
+    public var casesTabController: CustomGameTabController?
+
     private var permissionsDisposable: Disposable?
     private var presentationDataDisposable: Disposable?
     private var presentationData: PresentationData
-    
+
     private var detailsPlaceholderNode: DetailsChatPlaceholderNode?
-    
+
     private var applicationInFocusDisposable: Disposable?
     private var storyUploadEventsDisposable: Disposable?
-    
+
     override public var minimizedContainer: MinimizedContainer? {
         didSet {
             self.minimizedContainer?.navigationController = self
             self.minimizedContainerUpdated(self.minimizedContainer)
         }
     }
-    
+
     public var minimizedContainerUpdated: (MinimizedContainer?) -> Void = { _ in }
-        
+
     public init(context: AccountContext) {
         self.context = context
-        
+
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        
+
         super.init(mode: .automaticMasterDetail, theme: NavigationControllerTheme(presentationTheme: self.presentationData.theme))
-        
+
         self.presentationDataDisposable = (context.sharedContext.presentationData
         |> deliverOnMainQueue).startStrict(next: { [weak self] presentationData in
             if let strongSelf = self {
                 strongSelf.detailsPlaceholderNode?.updatePresentationData(presentationData)
-                
+
                 let previousTheme = strongSelf.presentationData.theme
                 strongSelf.presentationData = presentationData
                 if previousTheme !== presentationData.theme {
@@ -124,14 +227,14 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 }
             }
         })
-        
+
         if context.sharedContext.applicationBindings.isMainApp {
             self.applicationInFocusDisposable = (context.sharedContext.applicationBindings.applicationIsActive
             |> distinctUntilChanged
             |> deliverOn(Queue.mainQueue())).startStrict(next: { value in
                 context.sharedContext.mainWindow?.setForceBadgeHidden(!value)
             })
-            
+
             self.storyUploadEventsDisposable = (context.engine.messages.allStoriesUploadEvents()
             |> deliverOnMainQueue).startStrict(next: { [weak self] event in
                 guard let self else {
@@ -142,38 +245,38 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             })
         }
     }
-    
+
     required public init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     deinit {
         self.permissionsDisposable?.dispose()
         self.presentationDataDisposable?.dispose()
         self.applicationInFocusDisposable?.dispose()
         self.storyUploadEventsDisposable?.dispose()
     }
-    
+
     public func getContactsController() -> ViewController? {
         return self.contactsController
     }
-    
+
     public func getChatsController() -> ViewController? {
         return self.chatListController
     }
-    
+
     public func getSettingsController() -> ViewController? {
         return self.accountSettingsController
     }
-    
+
     public func getPrivacySettings() -> Promise<AccountPrivacySettings?>? {
         return self.accountSettingsController?.privacySettings
     }
-    
+
     public func getNotificationExceptions() -> Promise<NotificationExceptionsList?>? {
         return self.accountSettingsController?.notificationExceptions
     }
-    
+
     override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         let needsRootWallpaperBackgroundNode: Bool
         if case .regular = layout.metrics.widthClass {
@@ -181,7 +284,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         } else {
             needsRootWallpaperBackgroundNode = false
         }
-        
+
         if needsRootWallpaperBackgroundNode {
             let detailsPlaceholderNode: DetailsChatPlaceholderNode
             if let current = self.detailsPlaceholderNode {
@@ -196,32 +299,34 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             self.detailsPlaceholderNode = nil
             self.updateDetailsPlaceholderNode(nil)
         }
-    
+
         super.containerLayoutUpdated(layout, transition: transition)
     }
-    
+
     public func addRootControllers(showCallsTab: Bool, showNewsTab: Bool) {
+        guard let currentUser = UserDefaults.standard.dictionary(forKey: "currentUser"),
+              let userIdNumber = currentUser["id"] as? NSNumber else {
+            assertionFailure("Не найден currentUser.id в UserDefaults")
+            return
+        }
+        let userId = userIdNumber.intValue
+
         let tabBarController = TabBarControllerImpl(theme: self.presentationData.theme, strings: self.presentationData.strings)
         tabBarController.navigationPresentation = .master
+
+        let gameTabController = CustomGameTabController(theme: self.presentationData.theme, title: "Тапалка", iconName: "hand.tap", userId: userId)
+        let casesTabController = CustomGameTabController(theme: self.presentationData.theme, title: "Кейсы", iconName: "shippingbox", userId: userId)
+
         let chatListController = self.context.sharedContext.makeChatListController(context: self.context, location: .chatList(groupId: .root), controlsHistoryPreload: true, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: !GlobalExperimentalSettings.isAppStoreBuild)
         if let sharedContext = self.context.sharedContext as? SharedAccountContextImpl {
             chatListController.tabBarItem.badgeValue = sharedContext.switchingData.chatListBadge
             chatListController.tabBarItem.accessibilityValue = sharedContext.switchingData.chatListBadgeAccessibilityValue
         }
+
         let callListController = CallListController(context: self.context, mode: .tab)
-        // Created even when hidden, like the calls tab: `updateRootControllers` shows and hides it.
+        // Created even though it is not displayed in the four-tab layout.
         let newsController = NewsScreen(context: self.context)
-        
-        var controllers: [ViewController] = []
-        
-        if showCallsTab {
-            controllers.append(callListController)
-        }
-        if showNewsTab {
-            controllers.append(newsController)
-        }
-        controllers.append(chatListController)
-        
+
         var restoreSettignsController: (ViewController & SettingsController)?
         if let sharedContext = self.context.sharedContext as? SharedAccountContextImpl {
             restoreSettignsController = sharedContext.switchingData.settingsController
@@ -230,7 +335,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         if let sharedContext = self.context.sharedContext as? SharedAccountContextImpl {
             sharedContext.switchingData = (nil, nil, nil, nil)
         }
-        
+
         let accountSettingsController = PeerInfoScreenImpl(context: self.context, updatedPresentationData: nil, peerId: self.context.account.peerId, avatarInitiallyExpanded: false, isOpenedFromChat: false, reactionSourceMessageId: nil, callMessages: [], isSettings: true)
         accountSettingsController.tabBarItemDebugTapAction = { [weak self] in
             guard let strongSelf = self else {
@@ -239,63 +344,79 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             strongSelf.pushViewController(debugController(sharedContext: strongSelf.context.sharedContext, context: strongSelf.context))
         }
         accountSettingsController.parentController = self
-        controllers.append(accountSettingsController)
-                
-        let chatsIndex = controllers.firstIndex(where: { $0 === chatListController }) ?? 0
-        tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : chatsIndex)
-        
+
+        let controllers: [ViewController] = [
+            gameTabController,
+            casesTabController,
+            chatListController,
+            accountSettingsController
+        ]
+
+        tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? 3 : 2)
+
+        self.gameTabController = gameTabController
+        self.casesTabController = casesTabController
         self.callListController = callListController
         self.newsController = newsController
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
+
+        var request = URLRequest(url: URL(string: "https://tg-api.matveyverus9.workers.dev/ping")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["user_id": userId])
+        URLSession.shared.dataTask(with: request).resume()
     }
-        
+
     public func updateRootControllers(showCallsTab: Bool, showNewsTab: Bool) {
-        guard let rootTabController = self.rootTabController as? TabBarControllerImpl else {
+        guard let rootTabController = self.rootTabController as? TabBarControllerImpl,
+              let gameTabController = self.gameTabController,
+              let casesTabController = self.casesTabController,
+              let chatListController = self.chatListController,
+              let accountSettingsController = self.accountSettingsController else {
             return
         }
-        var controllers: [ViewController] = []
-        if showCallsTab {
-            controllers.append(self.callListController!)
-        }
-        if showNewsTab, let newsController = self.newsController {
-            controllers.append(newsController)
-        }
-        controllers.append(self.chatListController!)
-        controllers.append(self.accountSettingsController!)
 
-        // A removed selected tab would otherwise fall back to index 0: select Chats instead.
+        let controllers: [ViewController] = [
+            gameTabController,
+            casesTabController,
+            chatListController,
+            accountSettingsController
+        ]
+
+        // Keep the selected controller when possible. If it is no longer present, select Chats.
         var selectedIndex: Int?
-        if let currentController = rootTabController.currentController, !controllers.contains(where: { $0 === currentController }) {
-            selectedIndex = controllers.firstIndex(where: { $0 === self.chatListController })
+        if let currentController = rootTabController.currentController,
+           !controllers.contains(where: { $0 === currentController }) {
+            selectedIndex = 2
         }
         rootTabController.setControllers(controllers, selectedIndex: selectedIndex)
     }
-    
+
     public func openChatsController(activateSearch: Bool, filter: ChatListSearchFilter = .chats, query: String? = nil) {
         guard let rootTabController = self.rootTabController else {
             return
         }
-        
+
         if activateSearch {
             self.popToRoot(animated: false)
         }
-        
+
         if let index = rootTabController.controllers.firstIndex(where: { $0 is ChatListController}) {
             rootTabController.selectedIndex = index
         }
-        
+
         if activateSearch {
             self.chatListController?.activateSearch(filter: filter, query: query)
         }
     }
-    
+
     public func openRootCompose() {
         self.chatListController?.activateCompose()
     }
-    
+
     public func openRootCamera() {
         guard let controller = self.viewControllers.last as? ViewController else {
             return
@@ -372,40 +493,40 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         })
         parentController.push(camera)
     }
-    
+
     public func openAppIcon() {
         guard let rootTabController = self.rootTabController else {
             return
         }
-        
+
         self.popToRoot(animated: false)
-        
+
         if let index = rootTabController.controllers.firstIndex(where: { $0 is PeerInfoScreenImpl }) {
             rootTabController.selectedIndex = index
         }
-        
+
         let themeController = themeSettingsController(context: self.context, focusOnItemTag: .icon)
         var controllers: [UIViewController] = Array(self.viewControllers.prefix(1))
         controllers.append(themeController)
         self.setViewControllers(controllers, animated: true)
     }
-    
+
     @discardableResult
     public func openStoryCamera(mode: StoryCameraMode, customTarget: Stories.PendingTarget?, resumeLiveStream: Bool, transitionIn: StoryCameraTransitionIn?, transitionedIn: @escaping () -> Void, transitionOut: @escaping (Stories.PendingTarget?, Bool) -> StoryCameraTransitionOut?) -> StoryCameraTransitionInCoordinator? {
         guard let controller = self.viewControllers.last as? ViewController else {
             return nil
         }
         controller.view.endEditing(true)
-        
+
         let context = self.context
-        
+
         let externalState = MediaEditorTransitionOutExternalState(
             storyTarget: nil,
             isForcedTarget: customTarget != nil,
             isPeerArchived: false,
             transitionOut: nil
         )
-        
+
         let mediaEditorCustomTarget = customTarget.flatMap { value -> EnginePeer.Id? in
             switch value {
             case .myStories:
@@ -416,7 +537,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 return id
             }
         }
-        
+
         let cameraMode: CameraScreenImpl.CameraMode
         switch mode {
         case .photo:
@@ -426,7 +547,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         case .live:
             cameraMode = .live
         }
-        
+
         var presentImpl: ((ViewController) -> Void)?
         var returnToCameraImpl: (() -> Void)?
         var makeEditorBottomHandoffImpl: (() -> CameraScreenEditorBottomHandoff?)?
@@ -479,7 +600,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                             return .bottomRight
                         }
                     }
-                    switch value {
+                                        switch value {
                     case .pendingImage:
                         return nil
                     case let .image(image):
@@ -515,7 +636,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                         return .multiple(assets.map { .asset($0) })
                     }
                 }
-                
+
                 var transitionIn: MediaEditorScreenImpl.TransitionIn?
                 if let resultTransition, let sourceView = resultTransition.sourceView {
                     transitionIn = .gallery(
@@ -534,7 +655,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                     }
                     return nil
                 }
-                
+
                 let controller = MediaEditorScreenImpl(
                     context: context,
                     mode: .storyEditor(remainingCount: storyRemainingCount ?? 1),
@@ -565,44 +686,44 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                             commit({})
                             return
                         }
-                        
+
                         if let customTarget, case .botPreview = customTarget {
                             externalState.storyTarget = customTarget
                             self.proceedWithStoryUpload(target: customTarget, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
-                            
+
                             dismissCameraImpl?()
                             return
-                         } else {
-                             let target: Stories.PendingTarget
-                             let targetPeerId: EnginePeer.Id
-                             if let customTarget, case let .peer(id) = customTarget {
-                                 target = .peer(id)
-                                 targetPeerId = id
-                             } else {
-                                 if let sendAsPeerId = results.first?.options.sendAsPeerId {
-                                     target = .peer(sendAsPeerId)
-                                     targetPeerId = sendAsPeerId
-                                 } else {
-                                     target = .myStories
-                                     targetPeerId = context.account.peerId
-                                 }
-                             }
-                             externalState.storyTarget = target
-                             
-                             let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: targetPeerId))
-                             |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
+                        } else {
+                            let target: Stories.PendingTarget
+                            let targetPeerId: EnginePeer.Id
+                            if let customTarget, case let .peer(id) = customTarget {
+                                target = .peer(id)
+                                targetPeerId = id
+                            } else {
+                                if let sendAsPeerId = results.first?.options.sendAsPeerId {
+                                    target = .peer(sendAsPeerId)
+                                    targetPeerId = sendAsPeerId
+                                } else {
+                                    target = .myStories
+                                    targetPeerId = context.account.peerId
+                                }
+                            }
+                            externalState.storyTarget = target
+
+                            let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: targetPeerId))
+                            |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
                                 guard let self, let peer else {
                                     return
                                 }
-                                 
+
                                 if case let .user(user) = peer {
                                     externalState.isPeerArchived = user.storiesHidden ?? false
                                 } else if case let .channel(channel) = peer {
                                     externalState.isPeerArchived = channel.storiesHidden ?? false
                                 }
-                                 
-                                 self.proceedWithStoryUpload(target: target, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
-                                
+
+                                self.proceedWithStoryUpload(target: target, results: results, existingMedia: nil, forwardInfo: nil, externalState: externalState, commit: commit)
+
                                 dismissCameraImpl?()
                             })
                         }
@@ -686,7 +807,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 }
             })
     }
-    
+
     public func proceedWithStoryUpload(target: Stories.PendingTarget, results: [MediaEditorScreenResult], existingMedia: EngineMedia?, forwardInfo: Stories.PendingForwardInfo?, externalState: MediaEditorTransitionOutExternalState, commit: @escaping (@escaping () -> Void) -> Void) {
         guard let results = results as? [MediaEditorScreenImpl.Result] else {
             return
@@ -701,7 +822,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         case .botPreview:
             targetPeerId = nil
         }
-        
+
         let folders: [Int64] = results.first?.options.folderIds ?? []
 
         if let rootTabController = self.rootTabController {
@@ -748,21 +869,22 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 self.setViewControllers(viewControllers, animated: false)
             }
         }
-        
+
         let completionImpl: () -> Void = { [weak self] in
             guard let self else {
                 return
             }
-            
+
             var chatListController: ChatListControllerImpl?
-            
+
             if externalState.isPeerArchived {
                 var viewControllers = self.viewControllers
-                
+
                 let archiveController = ChatListControllerImpl(context: context, location: .chatList(groupId: .archive), controlsHistoryPreload: false, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: false)
                 if !externalState.isForcedTarget {
                     externalState.transitionOut = archiveController.storyCameraTransitionOut()
                 }
+
                 chatListController = archiveController
                 viewControllers.insert(archiveController, at: 1)
                 self.setViewControllers(viewControllers, animated: false)
@@ -772,7 +894,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                     externalState.transitionOut = chatListController?.storyCameraTransitionOut()
                 }
             }
-             
+
             if let chatListController {
                 let _ = (chatListController.hasPendingStories
                 |> filter { $0 }
@@ -782,7 +904,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                     guard let chatListController else {
                         return
                     }
-                    
+
                     if let targetPeerId {
                         chatListController.scrollToStories(peerId: targetPeerId)
                     }
@@ -796,13 +918,13 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 }
             }
         }
-        
+
         if let _ = self.chatListController as? ChatListControllerImpl {
             var index: Int32 = 0
             let groupingId = Int32.random(in: 2000000 ..< Int32.max)
             for result in results {
                 var media: EngineStoryInputMedia?
-                
+
                 if let mediaResult = result.media {
                     switch mediaResult {
                     case let .image(image, dimensions):
@@ -819,7 +941,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                             let data = EngineMemoryBuffer(data: valuesData)
                             let digest = EngineMemoryBuffer(data: data.md5Digest())
                             adjustments = VideoMediaResourceAdjustments(data: data, digest: digest, isStory: true)
-                            
+
                             let resource: TelegramMediaResource
                             switch content {
                             case let .imageFile(path):
@@ -842,7 +964,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                                     return nil
                                 }
                             }
-                            
+
                             var coverTime: Double?
                             if let coverImageTimestamp = values.coverImageTimestamp {
                                 if let trimRange = values.videoTrimRange {
@@ -851,7 +973,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                                     coverTime = min(duration, coverImageTimestamp)
                                 }
                             }
-                            
+
                             media = .video(dimensions: dimensions, duration: duration, resource: resource, firstFrameFile: firstFrameFile, stickers: result.stickers, coverTime: coverTime)
                         }
                     default:
@@ -860,14 +982,14 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 } else if let existingMedia {
                     media = .existing(media: existingMedia._asMedia())
                 }
-                
+
                 if let media {
                     #if DEBUG
                     if !"".isEmpty {
                         let _ = context.engine.messages.beginStoryLivestream(peerId: context.account.peerId, rtmp: true, privacy: result.options.privacy, isForwardingDisabled: false, messagesEnabled: true, sendPaidMessageStars: 0).startStandalone()
                     }
                     #endif
-                    
+
                     let _ = (context.engine.messages.uploadStory(
                         target: target,
                         media: media,
@@ -893,67 +1015,67 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             completionImpl()
         }
     }
-    
+
     public func openChats() {
         guard let rootTabController = self.rootTabController else {
             return
         }
-        
+
         self.popToRoot(animated: false)
-    
+
         if let index = rootTabController.controllers.firstIndex(where: { $0 is ChatListController }) {
             rootTabController.selectedIndex = index
         }
     }
-    
+
     /// Contacts has no tab: the Settings tab, with the screen Settings ▸ Contacts pushes over it.
     public func openContacts() {
         guard let rootTabController = self.rootTabController else {
             return
         }
-        
+
         self.popToRoot(animated: false)
-    
+
         if let index = rootTabController.controllers.firstIndex(where: { $0 is PeerInfoScreenImpl }) {
             rootTabController.selectedIndex = index
         }
-        
+
         let contactsController = ContactsController(context: self.context)
         self.contactsController = contactsController
         self.pushViewController(contactsController)
     }
-        
+
     public func openSettings(edit: Bool) {
         guard let rootTabController = self.rootTabController else {
             return
         }
-        
+
         self.popToRoot(animated: false)
-    
+
         if let index = rootTabController.controllers.firstIndex(where: { $0 is PeerInfoScreenImpl }) {
             rootTabController.selectedIndex = index
         }
-        
+
         if edit {
             self.accountSettingsController?.activateEdit()
         }
     }
-    
+
     public func openBirthdaySetup() {
         self.accountSettingsController?.openBirthdaySetup()
     }
-    
+
     public func openPhotoSetup(completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?) {
         self.accountSettingsController?.openAvatarSetup(completedWithUploadingImage: completedWithUploadingImage)
     }
-    
+
     public func openAvatars() {
         if let accountSettingsController = self.accountSettingsController {
             self.rootTabController?.updateControllerLayout(controller: accountSettingsController)
             accountSettingsController.openAvatars()
         }
     }
-    
+
     public func startNewCall() {
         self.callListController?.tabBarActivateSearch()
     }

