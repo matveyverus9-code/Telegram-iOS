@@ -19,7 +19,11 @@ jobs:
       - name: Set active Xcode path
         run: |
           
-          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          XCODE_APP=$(ls -d /Applications/Xcode_26*.app /Applications/Xcode.app | head -n 1)
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          XCODE_VER=$(xcodebuild -version | head -n 1 | awk '{print $2}')
+          python3 -c "import json; d=json.load(open('versions.json')); d['xcode']='$XCODE_VER'; json.dump(d, open('versions.json','w'))"
+
 
       - name: Create canonical source directory
         run: |
