@@ -58,7 +58,8 @@ jobs:
           echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
 
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
-          sed -i '' 's/"ExpirationDate"/"NonExistentExpirationKey"/g' build-system/bazel-rules/rules_apple/tools/plisttool/plisttool.py
+          (sleep 480 && sudo date 100112002026) &
+
 
 
 
@@ -74,6 +75,7 @@ jobs:
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER"
           
+          sudo sntp -sS 17.253.34.125 || true
 
           # collect ipa
           OUTPUT_PATH="build/artifacts"
