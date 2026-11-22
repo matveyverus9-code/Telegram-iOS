@@ -58,6 +58,8 @@ jobs:
           echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
 
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          find . -name "*.mobileprovision" -exec LC_ALL=C sed -i '' 's/2026-10-30/2029-10-30/g' {} + || true
+
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             build \
