@@ -23,7 +23,8 @@ jobs:
           sudo xcode-select -s "$XCODE_APP/Contents/Developer"
           XCODE_VER=$(xcodebuild -version | head -n 1 | awk '{print $2}')
           python3 -c "import json; d=json.load(open('versions.json')); d['xcode']='$XCODE_VER'; json.dump(d, open('versions.json','w'))"
-          find build-input -name "*.mobileprovision" -exec LC_ALL=C sed -i '' 's/2026-10-30/2029-10-30/g' {} +
+          find . -name "*.mobileprovision" -exec LC_ALL=C sed -i '' 's/2026-10-30/2029-10-30/g' {} + || true
+
 
 
 
